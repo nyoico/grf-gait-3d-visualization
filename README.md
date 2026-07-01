@@ -4,6 +4,8 @@ This repository contains the anonymized implementation for a ground reaction for
 
 The framework includes preprocessing, Transformer-based gait classification, model training, checkpoint loading, and Blender-based visualization scripts for synchronizing gait-related outputs with a 3D digital twin environment.
 
+![Blender Visualization](0001-0101.gif)
+
 ## Repository Structure
 
 ```text
