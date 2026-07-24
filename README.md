@@ -34,16 +34,8 @@ grf-gait-digital-twin/
 Create a virtual environment and install the required packages:
 
 ```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-For Windows PowerShell:
-
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+conda create -n gait-env -y
+conda activate gait-env
 pip install -r requirements.txt
 ```
 
@@ -76,11 +68,3 @@ blender_script.py
 ```
 
 To use it, open the Blender project file, go to the scripting workspace, load `blender_script.py`, and run the script inside Blender. The script is designed to synchronize gait-related model outputs with a digital twin visualization.
-
-## Data Availability
-
-The original dataset is not included in this anonymized repository due to data usage and privacy restrictions. The repository provides the source code and trained model checkpoint required to inspect the implementation pipeline.
-
-## Anonymity Note
-
-This repository has been anonymized for double-blind review. Author names, affiliations, institutional identifiers, and personal account information are intentionally omitted during the review period.
