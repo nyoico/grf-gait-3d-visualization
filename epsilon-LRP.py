@@ -91,11 +91,11 @@ def load_data():
 
 def ensure_channel_first(x):
     """
-    Conv1d 입력은 (N, C, T)
-    데이터가 (N, T, C)이면 (N, C, T)로 변환
+    Conv1d expects input in (N, C, T) format.
+    Convert data from (N, T, C) to (N, C, T) when necessary.
     """
     if x.ndim != 3:
-        raise ValueError(f"x는 3차원이어야 합니다. 현재 shape: {x.shape}")
+        raise ValueError(f"x must be three-dimensional. Current shape: {x.shape}")
 
     if x.shape[-1] in [3, 5, 6, 10]:
         x = np.transpose(x, (0, 2, 1))
@@ -105,12 +105,12 @@ def ensure_channel_first(x):
 
 def to_channel_last(x):
     """
-    시각화 함수 입력용.
-    학습/모델 입력: (N, C, T)
-    시각화 입력: (N, T, C)
+    Convert model input to the channel-last format used by visualization functions.
+    Training/model input: (N, C, T)
+    Visualization input: (N, T, C)
     """
     if x.ndim != 3:
-        raise ValueError(f"x는 3차원이어야 합니다. 현재 shape: {x.shape}")
+        raise ValueError(f"x must be three-dimensional. Current shape: {x.shape}")
 
     return np.transpose(x, (0, 2, 1)).astype(np.float32)
 
@@ -125,7 +125,7 @@ def encode_labels(labels):
 def normalize_train_test(X_train, X_test, eps=1e-6):
     """
     X shape: (N, C, T)
-    left/right 각각 train 기준으로 독립 normalization
+    Normalize the left and right inputs independently using their respective training-set statistics.
     """
     mean = X_train.mean(axis=(0, 2), keepdims=True)
     std = X_train.std(axis=(0, 2), keepdims=True)
@@ -230,12 +230,12 @@ def predict(model, loader, device):
 @torch.no_grad()
 def save_test_inference_csv(model, loader, device, save_path):
     """
-    test inference 시점에 test 데이터의 모든 샘플을 1개씩 CSV로 저장.
+    Save every test sample to a CSV file during test inference.
 
-    CSV 1 row = test sample 1개
-    fx/fy/fz는 sequence 전체를 JSON list 문자열로 저장.
+    One CSV row corresponds to one test sample.
+    The full fx/fy/fz sequences are stored as JSON-formatted list strings.
 
-    channel 순서 가정:
+    Assumed channel order:
     channel 0 = fx = ML
     channel 1 = fy = AP
     channel 2 = fz = V
@@ -467,9 +467,9 @@ def measure_latency(model, test_dataset, device, warmup=20, repeat=100):
 
 class LRPGaitTransformer:
     """
-    네 Model 구조에 맞춘 LRP 클래스.
+    LRP implementation tailored to the current Model architecture.
 
-    사용 모델 구조:
+    Expected model structure:
     - model.sensorL_embed.conv
     - model.sensorR_embed.conv
     - model.encoder: ModuleList[Encoder]
@@ -564,7 +564,7 @@ class LRPGaitTransformer:
 
     def lrp_linear(self, activation, relevance_out, weight, bias=None):
         """
-        Linear layer용 epsilon-LRP.
+        Epsilon-LRP for a linear layer.
         """
         if activation.dim() == 3:
             T, B, D_in = activation.shape
@@ -612,7 +612,7 @@ class LRPGaitTransformer:
 
     def lrp_conv1d(self, activation, relevance_out, conv_layer):
         """
-        Conv1d layer용 epsilon-LRP.
+        Epsilon-LRP for a Conv1d layer.
         activation: (B, C_in, T)
         relevance_out: (B, C_out, T)
         """
@@ -667,36 +667,36 @@ class LRPGaitTransformer:
 
     def _ff_input_to_conv_format(self, ff_input, embed_dim):
         """
-        FF block 입력을 Conv1d 형식 (B, D, T)로 맞춘다.
+        Convert the feed-forward block input to Conv1d format: (B, D, T).
 
-        현재 모델의 layer.ff는 Conv1d 기반이므로 실제 hook input이
-        이미 (B, D, T)인 경우가 많다. 기존 코드처럼 무조건
-        (T, B, D)라고 보고 permute하면 (1,256,1)이 (256,1,1)로
-        바뀌어서 Conv1d channel mismatch가 발생한다.
+        Because layer.ff in the current model is Conv1d-based, the hooked input
+        is often already in (B, D, T) format. Unconditionally treating it as
+        (T, B, D) and permuting it would change (1, 256, 1) to (256, 1, 1),
+        causing a Conv1d channel mismatch.
         """
         if ff_input.dim() != 3:
-            raise ValueError(f"FF input은 3차원이어야 합니다. 현재 shape: {ff_input.shape}")
+            raise ValueError(f"FF input must be three-dimensional. Current shape: {ff_input.shape}")
 
-        # 이미 Conv1d 형식: (B, D, T)
+        # Already in Conv1d format: (B, D, T)
         if ff_input.shape[1] == embed_dim:
             return ff_input.contiguous(), "BDT"
 
-        # Transformer 형식: (T, B, D)
+        # Transformer format: (T, B, D)
         if ff_input.shape[2] == embed_dim:
             return ff_input.permute(1, 2, 0).contiguous(), "TBD"
 
         raise ValueError(
-            f"FF input shape를 해석할 수 없습니다. shape={ff_input.shape}, "
+            f"Unable to interpret the FF input shape. shape={ff_input.shape}, "
             f"expected embed_dim={embed_dim}"
         )
 
     def _relevance_to_conv_format(self, R, ff_input_conv):
         """
-        relevance R을 ff_input_conv와 같은 (B, D, T) 형식으로 맞춘다.
-        R은 보통 (T, B, D)이지만, 이미 (B, D, T)일 수도 있다.
+        Convert relevance R to the same (B, D, T) format as ff_input_conv.
+        R is usually in (T, B, D) format, but it may already be in (B, D, T).
         """
         if R.dim() != 3:
-            raise ValueError(f"R은 3차원이어야 합니다. 현재 shape: {R.shape}")
+            raise ValueError(f"R must be three-dimensional. Current shape: {R.shape}")
 
         B, D, T = ff_input_conv.shape
 
@@ -706,21 +706,20 @@ class LRPGaitTransformer:
         if R.shape[0] == T and R.shape[1] == B and R.shape[2] == D:
             return R.permute(1, 2, 0).contiguous()
 
-        # decoder 길이 1 relevance를 encoder/ff time 길이에 맞춰 확장해야 하는 경우
+        # Expand single-step decoder relevance to match the encoder/FF temporal length when needed
         if R.shape[0] == 1 and R.shape[1] == B and R.shape[2] == D and T > 1:
             R = R.repeat(T, 1, 1) / T
             return R.permute(1, 2, 0).contiguous()
 
         raise ValueError(
-            f"R shape를 FF input shape에 맞출 수 없습니다. "
+            f"Unable to align the shape of R with the FF input shape. "
             f"R={R.shape}, ff_input_conv={ff_input_conv.shape}"
         )
 
     def lrp_sequential_conv(self, activation, relevance_out, sequential_module):
         """
-        FFN 구조:
-        Conv1d -> ReLU -> Conv1d
-        에 대한 backward relevance propagation.
+        Backward relevance propagation through the FFN structure:
+        Conv1d -> ReLU -> Conv1d.
         activation/relevance_out: (B, D, T)
         """
         layers = list(sequential_module.children())
@@ -761,11 +760,11 @@ class LRPGaitTransformer:
 
         if sensorL.dim() != 3 or sensorR.dim() != 3:
             raise ValueError(
-                f"sensorL/sensorR는 3차원이어야 합니다. "
+                f"sensorL and sensorR must be three-dimensional. "
                 f"sensorL: {sensorL.shape}, sensorR: {sensorR.shape}"
             )
 
-        # 혹시 (B, T, C)가 들어온 경우 보정
+        # Convert inputs from (B, T, C) to (B, C, T) when necessary
         if sensorL.shape[1] > sensorL.shape[2]:
             sensorL = sensorL.permute(0, 2, 1).contiguous()
             sensorR = sensorR.permute(0, 2, 1).contiguous()
@@ -836,10 +835,10 @@ class LRPGaitTransformer:
 
                     R = R_before_ff.permute(2, 0, 1).contiguous()
 
-            # masked_attn, cross_attn은 visualize_lrp.py와 동일하게 단순 pass-through
+            # Treat masked attention and cross-attention as pass-through, as in visualize_lrp.py
             pass
 
-        # decoder target length가 1이므로 encoder time length T로 relevance 확장
+        # Expand relevance to the encoder temporal length T because the decoder target length is 1
         if R.size(0) == 1:
             R = R.repeat(T, 1, 1) / T  # (T, B, D)
 
@@ -865,13 +864,13 @@ class LRPGaitTransformer:
 
                     R = R_before_ff.permute(2, 0, 1).contiguous()
 
-            # self_attn은 visualize_lrp.py와 동일하게 단순 pass-through
+            # Treat self-attention as pass-through, as in visualize_lrp.py
             pass
 
         # R: (T, B, D) -> (B, T, D)
         R = R.permute(1, 0, 2).contiguous()
 
-        # left/right embedding은 더해서 합쳤으므로 relevance를 반씩 분배
+        # Split relevance equally because the left and right embeddings are combined by summation
         R_L = R / 2
         R_R = R / 2
 
@@ -941,8 +940,8 @@ def _draw_relevance_bands(
 ):
     """
     rel_1d: (T,)
-    양수 relevance: red band
-    음수 relevance: blue band
+    Positive relevance: red band
+    Negative relevance: blue band
     """
     r = np.asarray(rel_1d, dtype=np.float32).squeeze()
     r = np.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1014,8 +1013,8 @@ def _draw_relevance_bands(
 def prepare_relevance(R, mode="signed"):
     """
     mode:
-    - signed: [-1, 1], 양/음 relevance 유지
-    - pos: [0, 1], 양수 relevance만 사용
+    - signed: [-1, 1], preserve positive and negative relevance
+    - pos: [0, 1], use only positive relevance
     """
     R = np.asarray(R, dtype=np.float32)
     R = np.nan_to_num(R, 0.0)
@@ -1031,14 +1030,14 @@ def prepare_relevance(R, mode="signed"):
 
 def get_force_channel_indices(num_channels):
     """
-    시각화할 force channel 인덱스 결정.
+    Determine the force-channel indices used for visualization.
 
-    3채널 데이터 가정:
+    Assumed 3-channel layout:
     0 = fx = ML
     1 = fy = AP
     2 = fz = V
 
-    5채널 데이터 가정:
+    Assumed 5-channel layout:
     0 = cop_ap
     1 = cop_ml
     2 = f_ap
@@ -1060,8 +1059,8 @@ def get_force_channel_indices(num_channels):
         }
 
     raise ValueError(
-        f"지원하지 않는 채널 수입니다: {num_channels}. "
-        f"3채널 또는 5채널 데이터를 기대합니다."
+        f"Unsupported number of channels: {num_channels}. "
+        f"Expected data with either 3 or 5 channels."
     )
 
 
@@ -1074,11 +1073,11 @@ def visualize_signal_bands_side(
 ):
     """
     X_all: (N, T, C)
-    rel_one: (T, C) 또는 (1, T, C)
+    rel_one: (T, C) or (1, T, C)
 
-    3행 x 2열:
-    - 왼쪽: class 전체 평균 곡선 + relevance band
-    - 오른쪽: class 전체 sample 곡선 + relevance band
+    3 rows x 2 columns:
+    - Left: class-wide mean curve with relevance bands
+    - Right: all class sample curves with relevance bands
     """
     if torch.is_tensor(rel_one):
         rel = rel_one.detach().cpu().numpy()
@@ -1091,7 +1090,7 @@ def visualize_signal_bands_side(
         rel = rel[0]
 
     if X_all.ndim != 3:
-        raise ValueError(f"X_all은 (N,T,C)이어야 합니다. 현재 shape: {X_all.shape}")
+        raise ValueError(f"X_all must have shape (N, T, C). Current shape: {X_all.shape}")
 
     N, T, C = X_all.shape
 
@@ -1100,7 +1099,7 @@ def visualize_signal_bands_side(
 
     if rel.shape[0] != T:
         raise ValueError(
-            f"relevance의 time length가 X_all과 맞지 않습니다. "
+            f"The temporal length of relevance does not match X_all. "
             f"X_all T={T}, rel shape={rel.shape}"
         )
 
@@ -1198,7 +1197,7 @@ def visualize_signal_bands_side(
 
         base = save_path.with_suffix("")
 
-        # 개별 subplot도 저장
+        # Save each subplot separately
         for r, name in enumerate(order):
             c = ch_idx[name]
 
@@ -1266,9 +1265,9 @@ def _average_relevance_list(relevance_list, mode="signed"):
     return: class mean relevance, shape (T, C)
 
     mode:
-    - signed: 양수/음수 relevance를 그대로 평균
-    - positive: 양수 relevance만 남긴 뒤 평균
-    - absolute: relevance 절댓값을 평균
+    - signed: average positive and negative relevance values as-is
+    - positive: retain only positive relevance values before averaging
+    - absolute: average the absolute relevance values
     """
     if len(relevance_list) == 0:
         return None
@@ -1284,8 +1283,8 @@ def _average_relevance_list(relevance_list, mode="signed"):
         pass
     else:
         raise ValueError(
-            f"지원하지 않는 relevance_average_mode입니다: {mode}. "
-            f"'signed', 'positive', 'absolute' 중 하나를 사용하세요."
+            f"Unsupported relevance_average_mode: {mode}. "
+            f"Use one of 'signed', 'positive', or 'absolute'."
         )
 
     return R.mean(axis=0)  # (T, C)
@@ -1303,34 +1302,34 @@ def run_lrp_band_analysis(
     relevance_average_mode="signed"
 ):
     """
-    AttnLRP/LRP output을 샘플 단위가 아니라 클래스별 평균으로 저장.
+    Save AttnLRP/LRP outputs as class-level means rather than per-sample results.
 
-    - test_inference CSV 저장 방식과는 무관함.
-    - 각 class의 test sample 전체에 대해 relevance를 계산한다.
-    - sample별 png를 저장하지 않고, class별 mean relevance png/npy만 저장한다.
+    - This is independent of the test-inference CSV export.
+    - Relevance is computed for every test sample in each class.
+    - Only class-mean relevance PNG and NPY files are saved; per-sample PNG files are not saved.
 
     X_test_left/right: (N, C, T)
     y_test: encoded label, shape (N,)
 
     relevance_average_mode:
-    - signed: 양수/음수 relevance를 그대로 평균
-    - positive: 양수 relevance만 평균
-    - absolute: relevance 절댓값 평균
+    - signed: average positive and negative relevance values as-is
+    - positive: average only positive relevance values
+    - absolute: average absolute relevance values
     """
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
     model.eval()
 
-    X_left_plot = to_channel_last(X_test_left)    # (N, T, C), signal plotting용
-    X_right_plot = to_channel_last(X_test_right)  # (N, T, C), signal plotting용
+    X_left_plot = to_channel_last(X_test_left)    # (N, T, C), for signal plotting
+    X_right_plot = to_channel_last(X_test_right)  # (N, T, C), for signal plotting
 
     lrp = LRPGaitTransformer(model, device)
 
     if num_samples_per_class is not None:
         print(
-            "[LRP INFO] num_samples_per_class는 더 이상 사용하지 않습니다. "
-            "클래스별 모든 test sample의 relevance 평균을 저장합니다."
+            "[LRP INFO] num_samples_per_class is no longer used. "
+            "The mean relevance over all test samples in each class will be saved."
         )
 
     mean_summary = {}
@@ -1405,7 +1404,7 @@ def run_lrp_band_analysis(
         )
 
         if rel_L_mean is None or rel_R_mean is None:
-            print(f"[LRP WARN] relevance 평균 계산 실패: {class_name}")
+            print(f"[LRP WARN] Failed to compute mean relevance for class: {class_name}")
             continue
 
         np.save(save_dir / f"relevance_left_{class_name}_class_mean.npy", rel_L_mean)
@@ -1507,10 +1506,10 @@ def main():
     print("y_test:", y_test.shape)
 
     if not np.array_equal(y_left_train, y_right_train):
-        print("[WARN] y_left_train과 y_right_train이 다릅니다. 현재 y_left_train을 사용합니다.")
+        print("[WARN] y_left_train and y_right_train differ. Using y_left_train.")
 
     if not np.array_equal(y_left_test, y_right_test):
-        print("[WARN] y_left_test와 y_right_test가 다릅니다. 현재 y_left_test를 사용합니다.")
+        print("[WARN] y_left_test and y_right_test differ. Using y_left_test.")
 
     train_full = GRFDataset(X_train_left, X_train_right, y_train)
     test_dataset = GRFDataset(X_test_left, X_test_right, y_test)
